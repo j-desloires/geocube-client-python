@@ -104,7 +104,6 @@ RUN mkdir gdal && cd gdal && curl -sL https://github.com/OSGeo/gdal/releases/dow
         ldconfig /usr/local/lib &&\
         cd /build && rm -rf gdal
 
-# Geocube downloader
 RUN git clone -b $GEOCUBEVERSION https://github.com/airbusgeo/geocube.git \
     && cd geocube/cmd/downloader \
     && go build -ldflags="-s -w" \
@@ -131,10 +130,12 @@ COPY --from=builder /usr/local/include /usr/local/include
 COPY --from=builder /build/downloader /usr/bin/downloader
 COPY docker/prepare_downloader.sh /usr/bin/prepare_downloader.sh
 
+# Geocube client
+COPY . /build/geocube-client-python
+
 RUN apt update \
     && apt install -y --no-install-recommends \
         g++ \
-        git \
         python3-pip \
         python3-setuptools \
         python3-dev \
@@ -144,15 +145,16 @@ RUN apt update \
         libcurl4-gnutls-dev \
         libtiff5 \
     && ln -s /usr/bin/python3 /usr/bin/python \
-    && python3 -m pip install \
+    && python3 -m pip install --upgrade pip \
+    && python3 -m pip install --no-cache-dir \
         gcloud \
-        "protobuf < 4" \
-        "numpy < 1.22" \
-        git+https://github.com/airbusgeo/geocube-client-python.git@$GEOCUBECLIENTVERSION \
+        "protobuf>=4.25" \
+        "numpy<1.22" \
         click~=7.1.2 \
         bokeh>=2.1.1 \
+        /build/geocube-client-python \
     && python3 -m pip install GDAL==$GDALVERSION \
-    && apt remove -y git g++ python3-dev --purge \
+    && apt remove -y g++ python3-dev --purge \
     && rm -rf /var/lib/apt/lists/* \
     && apt autoremove -y \
     && apt clean -y
@@ -165,6 +167,7 @@ ENTRYPOINT ["/tini", "-g", "--", "/usr/bin/prepare_downloader.sh"]
 # Test critical imports
 RUN python3 -c "\
 from osgeo import gdal, gdal_array, ogr, osr; \
+from geocube import *; \
 print('GDAL version:', gdal.__version__); \
 print('GDAL array support: OK')"
 
